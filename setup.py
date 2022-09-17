@@ -1,3 +1,4 @@
+"""Utilities for setuptools integration."""
 from setuptools import setup
 
 
@@ -5,8 +6,8 @@ setup(
     name="lcapt",
     version="0.0.1",
     description="LCA Sparse Coding in PyTorch.",
-    author="Michael Teti",
-    author_email="mteti@fau.edu",
+    author="Michael Teti, Carlos Gonzalez Rivera",
+    author_email="mteti@fau.edu, cargonriv@gmail.com",
     packages=["lcapt"],
     install_requires=[
         "black>=22.1.0",

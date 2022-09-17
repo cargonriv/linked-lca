@@ -1,24 +1,19 @@
-from __future__ import annotations
-
-from copy import deepcopy
+"""Module containing the model's behavior and its functions."""
 import os
-from typing import Any, Callable, Optional, Union
-import yaml
+from copy import deepcopy
+from typing import Any, Callable, Dict, Optional, Tuple, Union
 
 import numpy as np
 import pandas as pd
 import torch
 import torch.nn.functional as F
+import yaml
 
 from .activation import hard_threshold, soft_threshold
-from .metric import (
-    compute_frac_active,
-    compute_l1_sparsity,
-    compute_l2_error,
-    compute_times_active_by_feature,
-)
+from .metric import compute_frac_active, compute_l1_sparsity, compute_l2_error, compute_times_active_by_feature
 from .preproc import make_unit_var, make_zero_mean
 from .util import to_3d_from_5d, to_4d_from_5d, to_5d_from_3d, to_5d_from_4d
+
 
 try:
     from typing import Literal  # python >= 3.8
@@ -160,12 +155,19 @@ class _LCAConvBase(torch.nn.Module):
         self._compute_padding()
         os.makedirs(self.result_dir, exist_ok=True)
         self._write_params(deepcopy(vars(self)))
-        super(_LCAConvBase, self).__init__()
+        super().__init__()
         self._init_weight_tensor()
         self.register_buffer("forward_pass", torch.tensor(1))
 
         if cudnn_benchmark and torch.backends.cudnn.enabled:
             torch.backends.cudnn.benchmark = True
+
+    def countingFast(comb, output):
+        n_output = np.zeros(comb.shape[0])
+        tmp = set(map(tuple, output))
+        for i in range(comb.shape[0]):
+            n_output[i] = int(tuple(comb[i]) in tmp)
+        return n_output
 
     def assign_weight_values(self, tensor: Tensor) -> None:
         """Manually assign weight tensor"""
@@ -183,9 +185,7 @@ class _LCAConvBase(torch.nn.Module):
     def _compute_inhib_pad(self) -> None:
         """Computes padding for compute_lateral_connectivity"""
         pad = []
-        for ksize, stride in zip(
-            [self.kt, self.kh, self.kw], [self.stride_t, self.stride_h, self.stride_w]
-        ):
+        for ksize, stride in zip([self.kt, self.kh, self.kw], [self.stride_t, self.stride_h, self.stride_w]):
             if ksize % 2 != 0:
                 pad.append((ksize - 1) // stride * stride)
             else:
@@ -229,9 +229,7 @@ class _LCAConvBase(torch.nn.Module):
         else:
             self.recon_output_pad = (0, 0, 0)
 
-    def compute_input_drive(
-        self, inputs: Tensor, weights: Union[Tensor, Parameter]
-    ) -> Tensor:
+    def compute_input_drive(self, inputs: Tensor, weights: Union[Tensor, Parameter]) -> Tensor:
         inputs, reshape_func = self._to_correct_input_shape(inputs)
         drive = F.conv3d(
             inputs,
@@ -255,11 +253,9 @@ class _LCAConvBase(torch.nn.Module):
     def _compute_n_surround(self, conns: Tensor) -> tuple:
         """Computes the number of surround neurons for each dim"""
         conn_shp = conns.shape[2:]
-        self.surround = tuple([int(np.ceil((dim - 1) / 2)) for dim in conn_shp])
+        self.surround = tuple(int(np.ceil((dim - 1) / 2)) for dim in conn_shp)
 
-    def compute_perc_change(
-        self, curr: Union[int, float], prev: Union[int, float]
-    ) -> float:
+    def compute_perc_change(self, curr: Union[int, float], prev: Union[int, float]) -> float:
         """Computes percent change of a value from t-1 to t"""
         return abs((curr - prev) / prev)
 
@@ -277,8 +273,8 @@ class _LCAConvBase(torch.nn.Module):
         trace_recons = torch.zeros(acts.shape[0], self.n_cells, self.trace_kt, 1, 1, device=acts.device.index)
         for row in range(act_height):
             for col in range(act_width):
-                trace_recons += F.conv_transpose3d(acts[..., row:row+1, col:col+1], self.trace_weights)
-        
+                trace_recons += F.conv_transpose3d(acts[..., row : row + 1, col : col + 1], self.trace_weights)
+
         if return_trace_recon:
             return reshape_func(recons), trace_recons.squeeze() / (act_height * act_width)
         else:
@@ -301,7 +297,7 @@ class _LCAConvBase(torch.nn.Module):
         error = error.unfold(-3, self.kw, self.stride_w)
         return torch.tensordot(acts, error, dims=([0, 2, 3, 4], [0, 2, 3, 4]))
 
-    def _create_trackers(self) -> dict[str, np.ndarray]:
+    def _create_trackers(self) -> Dict[str, np.ndarray]:
         """Create placeholders to store different metrics"""
         float_tracker = np.zeros([self.lca_iters], dtype=np.float32)
         return {
@@ -312,32 +308,28 @@ class _LCAConvBase(torch.nn.Module):
             "Tau": float_tracker.copy(),
         }
 
-    def encode(self, inputs: Tensor, traces: Tensor) -> tuple[list, list, list, list, Tensor, Tensor]:
+    def encode(self, inputs: Tensor, traces: Tensor, ind: int) -> Tuple[list, list, list, list, Tensor, Tensor]:
         """Computes sparse code given data x and dictionary D"""
         input_drive = self.compute_input_drive(inputs, self.weights)
         trace_input_drive = F.conv3d(traces, self.trace_weights)
         states = torch.zeros_like(input_drive, requires_grad=self.req_grad)
-        connectivity = self.compute_lateral_connectivity(self.weights)
+        connectivity = self.compute_lateral_connectivity(self.weights.cuda())
         trace_connectivity = F.conv3d(self.trace_weights, self.trace_weights)
         tau = self.tau
 
+        states_all = []
         acts_all = []
         recon_all = []
         recon_error_all = []
-        states_all = []
 
         for lca_iter in range(1, self.lca_iters + 1):
+
             acts = self.transfer(states)
             inhib = self.lateral_competition(acts, connectivity)
             trace_inhib = F.conv3d(acts, trace_connectivity)
             states = states + (1 / tau) * (input_drive + trace_input_drive - states - inhib - trace_inhib + 2 * acts)
 
-            if (
-                self.track_metrics
-                or lca_iter == self.lca_iters
-                or self.lca_tol is not None
-                or self.return_all
-            ):
+            if self.track_metrics or lca_iter == self.lca_iters or self.lca_tol is not None or self.return_all:
                 recon = self.compute_recon(acts, self.weights)
                 recon_error = inputs - recon
 
@@ -350,9 +342,7 @@ class _LCAConvBase(torch.nn.Module):
                 if self.track_metrics or self.lca_tol is not None:
                     if lca_iter == 1:
                         tracks = self._create_trackers()
-                    tracks = self._update_tracks(
-                        tracks, lca_iter, acts, inputs, recon, tau
-                    )
+                    tracks = self._update_tracks(tracks, lca_iter, acts, inputs, recon, tau)
                     if self.lca_tol is not None:
                         if lca_iter > self.lca_warmup:
                             if self._stop_lca(tracks["TotalEnergy"], lca_iter):
@@ -372,7 +362,7 @@ class _LCAConvBase(torch.nn.Module):
             connectivity,
         )
 
-    def forward(self, inputs: Tensor) -> Union[Tensor, tuple[Tensor, Tensor, Tensor]]:
+    def forward(self, inputs: Tensor, ind: int) -> Union[Tensor, Tuple[Tensor, Tensor, Tensor]]:
         inputs, traces = inputs
         traces = traces.unsqueeze(-1).unsqueeze(-1)
 
@@ -387,7 +377,7 @@ class _LCAConvBase(torch.nn.Module):
             traces = make_unit_var(traces)
 
         inputs, reshape_func = self._to_correct_input_shape(inputs)
-        acts, recon, recon_error, states, input_drive, conns = self.encode(inputs, traces)
+        acts, recon, recon_error, states, input_drive, conns = self.encode(inputs, traces, ind)
         self.forward_pass += 1
 
         if self.return_all:
@@ -404,13 +394,11 @@ class _LCAConvBase(torch.nn.Module):
             return reshape_func(acts[-1])
 
     def _init_weight_tensor(self) -> None:
-        weights = torch.randn(
-            self.n_neurons, self.in_c, self.kt, self.kh, self.kw, dtype=self.dtype
-        )
+        weights = torch.randn(self.n_neurons, self.in_c, self.kt, self.kh, self.kw, dtype=self.dtype).cuda()
         weights[weights.abs() < 1.0] = 0.0
         self.weights = torch.nn.Parameter(weights, requires_grad=self.req_grad)
         self.normalize_weights()
-        trace_weights = torch.randn(self.n_neurons, self.n_cells, 7, 1, 1, dtype=self.dtype)
+        trace_weights = torch.randn(self.n_neurons, self.n_cells, 7, 1, 1, dtype=self.dtype).cuda()
         trace_weights[trace_weights.abs() < 0.5] = 0.0
         self.trace_weights = torch.nn.Parameter(trace_weights, requires_grad=self.req_grad)
         with torch.no_grad():
@@ -430,7 +418,15 @@ class _LCAConvBase(torch.nn.Module):
         """Determines when to stop LCA loop early by comparing the
         percent change between a running avg of the objective value
         at time t and that at time t-1 and checking if it is less
-        then the user-defined lca_tol value"""
+        then the user-defined lca_tol value
+
+        Args:
+            energy_history (np.ndarray): history of the model's energy computations
+            lca_iter (int): current LCA iteration
+
+        Returns:
+            bool: Whether to stop LCA loop early or not.
+        """
         curr_avg = energy_history[lca_iter - 100 : lca_iter].mean()
         prev_avg = energy_history[lca_iter - 101 : lca_iter - 1].mean()
         perc_change = self.compute_perc_change(curr_avg, prev_avg)
@@ -440,9 +436,7 @@ class _LCAConvBase(torch.nn.Module):
         else:
             return False
 
-    def _to_correct_input_shape(
-        self, inputs: Tensor
-    ) -> tuple[Tensor, Callable[[Tensor], Tensor]]:
+    def _to_correct_input_shape(self, inputs: Tensor) -> Tuple[Tensor, Callable[[Tensor], Tensor]]:
         pass
 
     def transfer(self, x: Tensor) -> Tensor:
@@ -456,27 +450,30 @@ class _LCAConvBase(torch.nn.Module):
         elif callable(self.transfer_func):
             return self.transfer_func(x)
 
-    def update_weights(self, acts: Tensor, recon_error: Tensor, recon_error_traces: Tensor) -> None:
+    def update_weights(self, acts: Tensor, recon_error: Tensor, recon_error_traces: Tensor, ind: int) -> None:
         """Updates the dictionary given the computed gradient"""
         with torch.no_grad():
             acts, _ = self._to_correct_input_shape(acts)
             recon_error, _ = self._to_correct_input_shape(recon_error)
             trace_error = recon_error_traces.unsqueeze(-1).unsqueeze(-1)
-            update = self.compute_weight_update(acts, recon_error)
             trace_error = trace_error.unfold(-3, self.trace_kt, 1)
             trace_error = trace_error.unfold(-3, 1, 1)
             trace_error = trace_error.unfold(-3, 1, 1)
             trace_update = torch.tensordot(acts, trace_error, dims=([0, 2, 3, 4], [0, 2, 3, 4]))
             times_active = compute_times_active_by_feature(acts) + 1
-            update *= self.eta / times_active
             trace_update *= self.eta / times_active
-            update = torch.clamp(
-                update, min=-self.d_update_clip, max=self.d_update_clip
-            )
-            self.weights.copy_(self.weights + update)
             self.trace_weights.copy_(self.trace_weights + trace_update)
-            self.trace_weights.copy_(self.trace_weights / (self.trace_weights.norm(2, (1, 2, 3, 4), keepdim=True) + 1e-8))
-            self.normalize_weights()
+            self.trace_weights.copy_(
+                self.trace_weights / (self.trace_weights.norm(2, (1, 2, 3, 4), keepdim=True) + 1e-8)
+            )
+
+            if ind <= 3:
+                update = self.compute_weight_update(acts, recon_error)
+                update *= self.eta / times_active
+                update = torch.clamp(update, min=-self.d_update_clip, max=self.d_update_clip)
+                self.weights.copy_(self.weights + update)
+                self.normalize_weights()
+
             if self.lr_schedule is not None:
                 self.eta = self.lr_schedule(self.forward_pass)
 
@@ -486,13 +483,13 @@ class _LCAConvBase(torch.nn.Module):
 
     def _update_tracks(
         self,
-        tracks: dict[str, np.ndarray],
+        tracks: Dict[str, np.ndarray],
         lca_iter: int,
         acts: Tensor,
         inputs: Tensor,
         recons: Tensor,
         tau: Union[int, float],
-    ) -> dict[str, np.ndarray]:
+    ) -> Dict[str, np.ndarray]:
         """Update dictionary that stores the tracked metrics"""
         l2_rec_err = compute_l2_error(inputs, recons).item()
         l1_sparsity = compute_l1_sparsity(acts, self.lambda_).item()
@@ -503,7 +500,7 @@ class _LCAConvBase(torch.nn.Module):
         tracks["Tau"][lca_iter - 1] = tau
         return tracks
 
-    def _write_params(self, arg_dict: dict[str, Any]) -> None:
+    def _write_params(self, arg_dict: Dict[str, Any]) -> None:
         """Writes model params to file"""
         arg_dict["dtype"] = str(arg_dict["dtype"])
         del arg_dict["lr_schedule"]
@@ -515,9 +512,7 @@ class _LCAConvBase(torch.nn.Module):
         with open(os.path.join(self.result_dir, "params.yaml"), "w") as yamlf:
             yaml.dump(arg_dict, yamlf, sort_keys=True)
 
-    def _write_tracks(
-        self, tracker: dict[str, np.ndarray], ts_cutoff: int, dev: Union[int, None]
-    ) -> None:
+    def _write_tracks(self, tracker: Dict[str, np.ndarray], ts_cutoff: int, dev: Union[int, None]) -> None:
         """Write out objective values to file"""
         for k, v in tracker.items():
             tracker[k] = v[:ts_cutoff]
@@ -564,7 +559,7 @@ class LCAConv1D(_LCAConvBase):
         req_grad: bool = False,
     ) -> None:
 
-        super(LCAConv1D, self).__init__(
+        super().__init__(
             n_neurons,
             in_c,
             result_dir,
@@ -595,17 +590,13 @@ class LCAConv1D(_LCAConvBase):
             False,
         )
 
-    def _to_correct_input_shape(
-        self, inputs: Tensor
-    ) -> tuple[Tensor, Callable[[Tensor], Tensor]]:
+    def _to_correct_input_shape(self, inputs: Tensor) -> Tuple[Tensor, Callable[[Tensor], Tensor]]:
         if len(inputs.shape) == 3:
             return to_5d_from_3d(inputs), to_3d_from_5d
         elif len(inputs.shape) == 5:
             return inputs, lambda inputs: inputs
         else:
-            raise ValueError(
-                f"Expected 3D inputs, but got {len(inputs.shape)}D inputs."
-            )
+            raise ValueError(f"Expected 3D inputs, but got {len(inputs.shape)}D inputs.")
 
     def get_weights(self) -> None:
         return to_3d_from_5d(self.weights.detach())
@@ -643,7 +634,7 @@ class LCAConv2D(_LCAConvBase):
         req_grad: bool = False,
     ) -> None:
 
-        super(LCAConv2D, self).__init__(
+        super().__init__(
             n_neurons,
             in_c,
             result_dir,
@@ -674,17 +665,13 @@ class LCAConv2D(_LCAConvBase):
             True,
         )
 
-    def _to_correct_input_shape(
-        self, inputs: Tensor
-    ) -> tuple[Tensor, Callable[[Tensor], Tensor]]:
+    def _to_correct_input_shape(self, inputs: Tensor) -> Tuple[Tensor, Callable[[Tensor], Tensor]]:
         if len(inputs.shape) == 4:
             return to_5d_from_4d(inputs), to_4d_from_5d
         elif len(inputs.shape) == 5:
             return inputs, lambda inputs: inputs
         else:
-            raise ValueError(
-                f"Expected 4D inputs, but got {len(inputs.shape)}D inputs."
-            )
+            raise ValueError(f"Expected 4D inputs, but got {len(inputs.shape)}D inputs.")
 
     def get_weights(self) -> Tensor:
         return to_4d_from_5d(self.weights.detach())
@@ -725,7 +712,7 @@ class LCAConv3D(_LCAConvBase):
         no_time_pad: bool = False,
     ) -> None:
 
-        super(LCAConv3D, self).__init__(
+        super().__init__(
             n_neurons,
             in_c,
             result_dir,
@@ -756,15 +743,11 @@ class LCAConv3D(_LCAConvBase):
             no_time_pad,
         )
 
-    def _to_correct_input_shape(
-        self, inputs: Tensor
-    ) -> tuple[Tensor, Callable[[Tensor], Tensor]]:
+    def _to_correct_input_shape(self, inputs: Tensor) -> Tuple[Tensor, Callable[[Tensor], Tensor]]:
         if len(inputs.shape) == 5:
             return inputs, lambda inputs: inputs
         else:
-            raise ValueError(
-                f"Expected 5D inputs, but got {len(inputs.shape)}D inputs."
-            )
+            raise ValueError(f"Expected 5D inputs, but got {len(inputs.shape)}D inputs.")
 
     def get_weights(self) -> Tensor:
         return self.weights.detach()

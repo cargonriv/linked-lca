@@ -1,2 +1,12 @@
-__pycache__
+lca/.ipynb_checkpoints
+.ipynb_checkpoints
 *.egg-info
+
+build
+data/*
+data/**
+figures/**
+reports/**
+reports/*
+reports
+tables
