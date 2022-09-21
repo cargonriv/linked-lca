@@ -1,4 +1,3 @@
-lca/.ipynb_checkpoints
 .ipynb_checkpoints
 *.egg-info
 
@@ -10,3 +9,7 @@ reports/**
 reports/*
 reports
 tables
+
+examples/brain_observatory
+examples/brain_observatory/*
+examples/brain_observatory/**
