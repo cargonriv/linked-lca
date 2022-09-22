@@ -63,7 +63,7 @@ Below is a mapping between the variable names used in this implementation and th
   * [Cifar-10](https://drive.google.com/file/d/1Et4El_L9AvSQcGTIgPFdfarw6dHpSsiC/view?usp=sharing)
 
 <p align="center">
-  <img src="https://github.com/cargonriv/linked-lca/blob/main/figures/dictionary_imageNetVid.gif.png" />
+  <img src="https://github.com/cargonriv/linked-lca/blob/main/figures/dictionary_imageNetVid.gif" />
 </p>
 <p align="center">
   <img src="https://github.com/cargonriv/linked-lca/blob/main/figures/imagenet_dict.png" />
