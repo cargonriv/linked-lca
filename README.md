@@ -3,8 +3,6 @@
 
 [![tests](https://github.com/cargonriv/linked-lca/actions/workflows/build.yml/badge.svg)](https://github.com/cargonriv/linked-lca/actions/workflows/build.yml)
 [![codecov](https://codecov.io/gh/cargonriv/linked-lca/branch/main/graph/badge.svg?token=4EPI05G5CY)](https://codecov.io/gh/cargonriv/linked-lca)
-[![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/cargonriv/linked-lca.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/cargonriv/linked-lca/context:python)
-[![Total alerts](https://img.shields.io/lgtm/alerts/g/cargonriv/linked-lca.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/cargonriv/linked-lca/alerts/)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
@@ -23,7 +21,7 @@ pip install git+https://github.com/cargonriv/linked-lca.git
 ### Manual Installation
 
 ```
-git clone git@github.com:MichaelTeti/linked-lca.git
+git clone git@github.com:cargonriv/linked-lca.git
 cd linked-lca
 pip install .
 ```
@@ -47,8 +45,7 @@ Below is a mapping between the variable names used in this implementation and th
 </div>
 
 ## Examples
-
-* Linked Dictionary Learning Using Built-In Update Method  
+  * Linked Dictionary Learning Using Built-In Update Method  
     * [Tutorial Dictionary Learning on Allen Institute Data](https://github.com/cargonriv/linked-lca/blob/main/examples/allen_dictionary_learning.ipynb.ipynb.ipynb)
     * [Monitor Training Data with Linked Dictionary Learning on Allen Institute Data](https://github.com/cargonriv/linked-lca/blob/main/examples/Default_Linked_Dictionary.ipynb.ipynb)
     * [Validation of Testing Data's Linked Dictionary Learning on Allen Institute Data](https://github.com/cargonriv/linked-lca/blob/main/examples/test_linked_dictionary.ipynb.ipynb)
