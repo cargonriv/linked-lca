@@ -64,5 +64,8 @@ Below is a mapping between the variable names used in this implementation and th
 
 <p align="center">
   <img src="https://github.com/cargonriv/linked-lca/blob/main/figures/dictionary_imageNetVid.gif.png" />
+</p>
+<p align="center">
   <img src="https://github.com/cargonriv/linked-lca/blob/main/figures/imagenet_dict.png" />
 </p>
+
