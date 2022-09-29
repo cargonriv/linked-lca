@@ -308,7 +308,7 @@ class _LCAConvBase(torch.nn.Module):
             "Tau": float_tracker.copy(),
         }
 
-    def encode(self, inputs: Tensor, traces: Tensor, ind: int) -> Tuple[list, list, list, list, Tensor, Tensor]:
+    def encode(self, inputs: Tensor, traces: Tensor) -> Tuple[list, list, list, list, Tensor, Tensor]:
         """Computes sparse code given data x and dictionary D"""
         input_drive = self.compute_input_drive(inputs, self.weights)
         trace_input_drive = F.conv3d(traces, self.trace_weights)
@@ -362,7 +362,7 @@ class _LCAConvBase(torch.nn.Module):
             connectivity,
         )
 
-    def forward(self, inputs: Tensor, ind: int) -> Union[Tensor, Tuple[Tensor, Tensor, Tensor]]:
+    def forward(self, inputs: Tensor) -> Union[Tensor, Tuple[Tensor, Tensor, Tensor]]:
         inputs, traces = inputs
         traces = traces.unsqueeze(-1).unsqueeze(-1)
 
@@ -377,7 +377,7 @@ class _LCAConvBase(torch.nn.Module):
             traces = make_unit_var(traces)
 
         inputs, reshape_func = self._to_correct_input_shape(inputs)
-        acts, recon, recon_error, states, input_drive, conns = self.encode(inputs, traces, ind)
+        acts, recon, recon_error, states, input_drive, conns = self.encode(inputs, traces)
         self.forward_pass += 1
 
         if self.return_all:
@@ -391,7 +391,7 @@ class _LCAConvBase(torch.nn.Module):
                 reshape_func(inputs),
             )
         else:
-            return reshape_func(acts[-1])
+            return reshape_func(acts[-1]), reshape_func(states[-1])
 
     def _init_weight_tensor(self) -> None:
         weights = torch.randn(self.n_neurons, self.in_c, self.kt, self.kh, self.kw, dtype=self.dtype).cuda()
@@ -467,7 +467,7 @@ class _LCAConvBase(torch.nn.Module):
                 self.trace_weights / (self.trace_weights.norm(2, (1, 2, 3, 4), keepdim=True) + 1e-8)
             )
 
-            if ind <= 3:
+            if ind <= 0:
                 update = self.compute_weight_update(acts, recon_error)
                 update *= self.eta / times_active
                 update = torch.clamp(update, min=-self.d_update_clip, max=self.d_update_clip)
